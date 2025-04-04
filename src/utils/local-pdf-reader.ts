@@ -3,25 +3,31 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from 'langchain/document';
 import { index, truncateEmbeddings } from './pinecone-client';
+import { readdir, readFile } from 'fs/promises';
+import { join } from 'path';
 
 // Helper function to log steps
 function logStep(step: string, data?: any) {
-  console.log(`[PDF] ${step}`, data || '');
+  console.log(`[LocalPDF] ${step}`, data || '');
 }
 
-export interface ProcessPDFResult {
+export interface ProcessLocalPDFResult {
   success: boolean;
   error?: string;
+  fileName?: string;
   chunks?: number;
 }
 
-export async function processPDF(file: File): Promise<ProcessPDFResult> {
+export async function processLocalPDF(pdfPath: string): Promise<ProcessLocalPDFResult> {
   try {
-    logStep('Starting PDF processing', { name: file.name });
+    logStep('Starting local PDF processing', { path: pdfPath });
 
-    // Convert file to buffer and create blob
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const blob = new Blob([buffer], { type: file.type });
+    // Read the PDF file
+    const buffer = await readFile(pdfPath);
+    const fileName = pdfPath.split('\\').pop() || 'unknown.pdf';
+
+    // Create a blob from the buffer
+    const blob = new Blob([buffer], { type: 'application/pdf' });
 
     // Load the PDF
     logStep('Loading PDF');
@@ -59,11 +65,11 @@ export async function processPDF(file: File): Promise<ProcessPDFResult> {
 
     // Create vectors with truncated embeddings
     const vectors = truncatedEmbeddings.map((embedding: number[], i: number) => ({
-      id: `${file.name.replace(/\s+/g, '-')}-chunk-${i}`, // Replace spaces with hyphens
+      id: `${fileName.replace(/\\s+/g, '-')}-chunk-${i}`, // Replace spaces with hyphens
       values: embedding,
       metadata: {
         text: docs[i].pageContent,
-        source: file.name,
+        source: fileName,
         chunk: i,
         type: 'pdf'
       },
@@ -74,7 +80,7 @@ export async function processPDF(file: File): Promise<ProcessPDFResult> {
     // Delete existing vectors for this file
     try {
       await index.deleteMany({
-        filter: { source: { $eq: file.name } }
+        filter: { source: { $eq: fileName } }
       });
       logStep('Deleted existing vectors');
     } catch (e) {
@@ -93,10 +99,11 @@ export async function processPDF(file: File): Promise<ProcessPDFResult> {
 
     return {
       success: true,
+      fileName,
       chunks: vectors.length
     };
   } catch (error) {
-    console.error('Error processing PDF:', error);
+    console.error('Error processing local PDF:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -104,72 +111,37 @@ export async function processPDF(file: File): Promise<ProcessPDFResult> {
   }
 }
 
-export async function queryPDF(question: string): Promise<{ answer: string; success: boolean }> {
+export async function processAllPDFsInFolder(folderPath: string): Promise<ProcessLocalPDFResult[]> {
   try {
-    logStep('Processing question', { question });
+    logStep('Reading PDFs from folder', { path: folderPath });
+    
+    // Read all files in the directory
+    const files = await readdir(folderPath);
+    const pdfFiles = files.filter(file => file.toLowerCase().endsWith('.pdf'));
+    
+    logStep('Found PDF files', { count: pdfFiles.length, files: pdfFiles });
 
-    // Check if there are any vectors in the index
-    const stats = await index.describeIndexStats();
-    logStep('Index stats', stats);
-
-    if (stats.totalRecordCount === 0) {
-      return {
-        success: true,
-        answer: "I don't have any information from the PDF yet. Please upload a PDF document first."
-      };
+    if (pdfFiles.length === 0) {
+      return [{
+        success: false,
+        error: 'No PDF files found in the specified folder'
+      }];
     }
 
-    // Initialize OpenAI embeddings
-    const embeddings = new OpenAIEmbeddings({
-      modelName: 'text-embedding-ada-002',
-      stripNewLines: true
-    });
-
-    // Generate embedding for the question
-    logStep('Generating question embedding');
-    const queryEmbedding = await embeddings.embedQuery(question);
-
-    // Truncate embedding to match index dimensions
-    const truncatedEmbedding = truncateEmbeddings([queryEmbedding])[0];
-    logStep('Embedding dimensions', { length: truncatedEmbedding.length });
-
-    // Query Pinecone
-    logStep('Querying Pinecone');
-    const queryResponse = await index.query({
-      vector: truncatedEmbedding,
-      topK: 5,
-      includeMetadata: true,
-    });
-
-    logStep('Query response', {
-      matches: queryResponse.matches?.length || 0,
-      firstMatchScore: queryResponse.matches?.[0]?.score
-    });
-
-    if (!queryResponse.matches || queryResponse.matches.length === 0) {
-      return {
-        success: true,
-        answer: "I couldn't find any relevant information in the PDF to answer your question. Please try rephrasing your question."
-      };
+    // Process each PDF file
+    const results = [];
+    for (const pdfFile of pdfFiles) {
+      const fullPath = join(folderPath, pdfFile);
+      const result = await processLocalPDF(fullPath);
+      results.push(result);
     }
 
-    // Sort matches by chunk order and format content
-    const relevantContent = queryResponse.matches
-      .sort((a: any, b: any) => a.metadata.chunk - b.metadata.chunk)
-      .map((match: any) => match.metadata.text)
-      .join('\n\n');
-
-    logStep('Found relevant content', { chunks: queryResponse.matches.length });
-
-    return {
-      success: true,
-      answer: relevantContent
-    };
+    return results;
   } catch (error) {
-    console.error('Error querying PDF:', error);
-    return {
+    console.error('Error processing PDFs in folder:', error);
+    return [{
       success: false,
-      answer: error instanceof Error ? error.message : 'Failed to process your question'
-    };
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }];
   }
 }
