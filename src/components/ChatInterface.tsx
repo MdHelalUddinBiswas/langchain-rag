@@ -124,13 +124,32 @@ export default function ChatInterface() {
 
   return (
     <div className="flex flex-col h-screen max-w-5xl mx-auto p-4">
-      <div className="flex-1 overflow-y-auto mb-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message, index) => (
           <div
             key={index}
-            className={`p-4 rounded-lg ${message.role === 'assistant' ? 'bg-blue-50 text-blue-800 ml-4' : 'bg-gray-50 text-gray-800 mr-4'}`}
+            className={`flex ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
           >
-            <p className="whitespace-pre-wrap">{message.content}</p>
+            <div
+              className={`max-w-[70%] rounded-lg p-3 ${
+                message.role === 'user'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-800'
+              }`}
+            >
+              <p className="whitespace-pre-wrap">
+                {message.role === 'user' 
+                  ? message.content 
+                  : message.content.split('\n').filter(line => 
+                      !line.includes('Pages vs components') && 
+                      !line.trim().startsWith('my-next-app/') &&
+                      !line.includes('Step 1 Create') &&
+                      !line.includes('Step 2 Create')
+                    ).join('\n')}
+              </p>
+            </div>
           </div>
         ))}
         {isLoading && (

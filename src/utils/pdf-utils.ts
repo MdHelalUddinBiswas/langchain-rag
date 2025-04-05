@@ -3,6 +3,7 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { Document } from 'langchain/document';
 import { index, truncateEmbeddings } from './pinecone-client';
+import OpenAI from 'openai';
 
 // Helper function to log steps
 function logStep(step: string, data?: any) {
@@ -161,9 +162,32 @@ export async function queryPDF(question: string): Promise<{ answer: string; succ
 
     logStep('Found relevant content', { chunks: queryResponse.matches.length });
 
+    // Use OpenAI to generate a concise answer
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that provides concise answers based on the given context. Only answer what is specifically asked and can be supported by the context."
+        },
+        {
+          role: "user",
+          content: `Context from PDF:\n${relevantContent}\n\nQuestion: ${question}\n\nProvide a concise answer based only on the context above.`
+        }
+      ],
+      temperature: 0,
+      max_tokens: 150
+    });
+
+    const answer = response.choices[0]?.message?.content || "I couldn't generate a specific answer from the PDF content.";
+
     return {
       success: true,
-      answer: relevantContent
+      answer
     };
   } catch (error) {
     console.error('Error querying PDF:', error);
