@@ -26,6 +26,7 @@ export default function ChatInterface() {
     if (!input.trim()) return;
 
     const userMessage = input.trim();
+    console.log(userMessage);
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
@@ -122,6 +123,8 @@ export default function ChatInterface() {
     }
   };
 
+  console.log(messagesEndRef, fileInputRef);
+
   return (
     <div className="flex flex-col h-[90vh] max-w-5xl mx-auto p-4">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -190,7 +193,7 @@ export default function ChatInterface() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask a question about the PDF..."
-            className="flex-1 p-2 border rounded"
+            className="flex-1 p-2 border rounded text-gray-800"
             disabled={isLoading}
           />
           <button
