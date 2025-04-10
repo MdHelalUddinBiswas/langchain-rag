@@ -14,7 +14,7 @@ const index = pc.index(process.env.PINECONE_INDEX_NAME);
 
 // Helper function to truncate embeddings to 1024 dimensions
 export function truncateEmbedding(embedding: number[]): number[] {
-  return embedding.slice(0, 1024);
+  return embedding.slice(0, 1536);
 }
 
 // Helper function to truncate multiple embeddings

@@ -156,7 +156,7 @@ export default function ChatInterface() {
           </div>
         ))}
         {isLoading && (
-          <div className="p-4 rounded-lg bg-gray-100 animate-pulse">
+          <div className="p-4 rounded-lg text-black bg-gray-100 animate-pulse">
             <p>Loading...</p>
           </div>
         )}

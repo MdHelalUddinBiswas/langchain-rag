@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const data = await req.formData();
     const file: File | null = data.get('file') as unknown as File;
-
+console.log(file);
     if (!file) {
       return NextResponse.json(
         { error: 'No file received.' },
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     }
 
     const result = await processPDF(file);
-
+console.log("result",result);
     if (!result.success) {
       return NextResponse.json(
         { 
